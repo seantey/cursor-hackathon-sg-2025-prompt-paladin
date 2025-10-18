@@ -13,25 +13,25 @@ def serve():
     from .server import mcp
     from .config import load_config
     
-    typer.echo("🏰 Starting Prompt Paladin MCP Server...")
+    typer.echo("🏰 Starting Prompt Paladin MCP Server...", err=True)
     
     try:
         # Load and validate config before starting
         config = load_config()
-        typer.echo("✅ Configuration loaded")
-        typer.echo(f"   Default Provider: {config.default_provider}")
-        typer.echo(f"   Auto-cast Heal: {config.auto_cast_heal}")
-        typer.echo(f"   Anger Translator: {config.anger_translator}")
-        typer.echo("")
-        typer.echo("🚀 Server running on stdio...")
-        typer.echo("   Press Ctrl+C to stop")
-        typer.echo("")
+        typer.echo("✅ Configuration loaded", err=True)
+        typer.echo(f"   Default Provider: {config.default_provider}", err=True)
+        typer.echo(f"   Auto-cast Heal: {config.auto_cast_heal}", err=True)
+        typer.echo(f"   Anger Translator: {config.anger_translator}", err=True)
+        typer.echo("", err=True)
+        typer.echo("🚀 Server running on stdio...", err=True)
+        typer.echo("   Press Ctrl+C to stop", err=True)
+        typer.echo("", err=True)
         
         # Run the MCP server
         mcp.run()
         
     except KeyboardInterrupt:
-        typer.echo("\n👋 Server stopped")
+        typer.echo("\n👋 Server stopped", err=True)
     except Exception as e:
         typer.echo(f"❌ Server error: {e}", err=True)
         raise typer.Exit(1)
