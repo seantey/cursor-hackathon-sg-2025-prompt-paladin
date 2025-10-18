@@ -8,7 +8,7 @@ An MCP server that assesses prompt quality in real time. It detects unclear, amb
 
 *The Citadel of Context, home of the Prompt Paladins, the last bastion against developer toxicity and sins.*  
 *Within its radiant halls, they guard the fragile harmony between human and machine, cleansing corrupted code and calming the storms of misguided prompts.*  
-*For in the AI realms, a single toxic word can twist intention and fracture clarity.*  
+*For in the Agentic realms, a single toxic word can twist intention and fracture clarity.*  
 
 *Thus the Paladins labor endlessly, healing wounded syntax, sanctifying context, and defending the sacred art of clear and purposeful instruction.*
 
