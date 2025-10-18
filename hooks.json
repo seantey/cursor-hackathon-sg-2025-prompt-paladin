@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "python3",
+        "args": ["hooks/before_submit_prompt.py"]
+      }
+    ]
+  }
+}
+
