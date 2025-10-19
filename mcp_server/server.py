@@ -1,8 +1,20 @@
 """FastMCP server for Prompt Paladin."""
+import logging
+import sys
 from fastmcp import FastMCP
 from typing import Optional, Dict, Any
 
 from .tools import pp_guard, pp_suggestions, pp_heal, pp_discuss, pp_proceed
+
+# Setup logging for MCP server
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.StreamHandler(sys.stderr)  # Log to stderr so it doesn't interfere with MCP protocol
+    ]
+)
 
 # Initialize MCP server
 mcp = FastMCP("prompt-paladin")

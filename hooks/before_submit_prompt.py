@@ -9,10 +9,12 @@ import json
 import logging
 import os
 import signal
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# Add project root to path for importing mcp_server modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ============================================
 # Logging Setup
@@ -55,6 +57,26 @@ logger.addHandler(stderr_handler)
 
 logger.info("=" * 60)
 logger.info("Hook starting")
+
+
+# ============================================
+# Helper Functions
+# ============================================
+
+def truncate_prompt(text: str, max_len: int = 500) -> str:
+    """
+    Truncate prompt text for logging while preserving readability.
+    
+    Args:
+        text: The prompt text to truncate
+        max_len: Maximum length (default: 500 chars)
+        
+    Returns:
+        Truncated text with ellipsis if needed
+    """
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "..."
 
 # ============================================
 # Configuration (User-Configurable via .env)
@@ -123,80 +145,55 @@ def _raise_timeout(signum, frame):
 
 
 # ============================================
-# MCP Tool Calling via Subprocess
+# MCP Tool Calling (Direct Import)
 # ============================================
 
 def call_mcp_guard(prompt: str, timeout: float = 25.0) -> dict:
     """
-    Call pp-guard tool via subprocess.
+    Call pp-guard tool directly.
     
     Args:
         prompt: User prompt to evaluate
-        timeout: Subprocess timeout in seconds
+        timeout: Timeout in seconds (unused in direct call, kept for compatibility)
         
     Returns:
         Guard result dict with verdict, reason, confidence, etc.
         On error: Returns {"verdict": "proceed"} to fail open
     """
-    logger.debug(f"Calling pp-guard with timeout={timeout}s")
-    logger.debug(f"Prompt (truncated): {prompt[:100]}...")
+    start_time = datetime.now()
+    logger.debug(f"Calling pp-guard directly (timeout={timeout}s)")
+    logger.info(f"Prompt [500 chars]: {truncate_prompt(prompt, 500)}")
     
     try:
-        # Find project root (one level up from hooks/)
-        project_root = Path(__file__).parent.parent
+        # Import here to avoid issues if imports fail
+        from mcp_server.tools import pp_guard
         
-        # Build subprocess command to call pp_guard
-        cmd = [
-            "uv", "run", "python", "-c",
-            """
-import json
-import sys
-sys.path.insert(0, '.')
-from mcp_server.tools import pp_guard
-
-prompt = sys.argv[1]
-result = pp_guard(prompt=prompt)
-print(json.dumps(result))
-""",
-            prompt
-        ]
+        # Call pp_guard directly
+        response = pp_guard(prompt=prompt)
         
-        # Run subprocess with timeout
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-            cwd=project_root
-        )
+        # Calculate timing
+        elapsed = (datetime.now() - start_time).total_seconds()
         
-        # Parse JSON output
-        if result.returncode == 0 and result.stdout.strip():
-            response = json.loads(result.stdout)
-            logger.info(f"pp-guard verdict: {response.get('verdict')} "
-                       f"(confidence: {response.get('confidence', 0.0)})")
-            logger.debug(f"pp-guard reason: {response.get('reason')}")
-            return response
-        else:
-            # Guard failed - fail open
-            logger.error(f"pp-guard failed with returncode {result.returncode}")
-            logger.error(f"stderr: {result.stderr}")
-            return {
-                "verdict": "proceed",
-                "reason": "Guard evaluation failed",
-                "confidence": 0.0
-            }
+        # Log results
+        verdict = response.get('verdict', 'unknown')
+        confidence = response.get('confidence', 0.0)
+        reason = response.get('reason', 'No reason provided')
+        issues = response.get('issues', [])
+        suggestions = response.get('suggestions', '')
+        
+        logger.info(f"pp-guard completed in {elapsed:.3f}s")
+        logger.info(f"VERDICT: {verdict} | confidence: {confidence:.2f} | reason: {reason}")
+        if issues:
+            logger.info(f"Issues: {', '.join(issues)}")
+        if suggestions:
+            logger.debug(f"Suggestions: {suggestions}")
+        
+        return response
             
-    except subprocess.TimeoutExpired:
-        logger.warning(f"pp-guard timeout after {timeout}s - failing open")
-        return {
-            "verdict": "proceed",
-            "reason": "Guard timeout",
-            "confidence": 0.0
-        }
     except Exception as e:
-        logger.error(f"pp-guard error: {e}", exc_info=True)
+        # Guard failed - fail open
+        elapsed = (datetime.now() - start_time).total_seconds()
+        logger.error(f"pp-guard error after {elapsed:.3f}s: {e}", exc_info=True)
         return {
             "verdict": "proceed",
             "reason": f"Guard error: {str(e)}",
@@ -206,74 +203,45 @@ print(json.dumps(result))
 
 def call_mcp_heal(prompt: str, mode: str = "auto", timeout: float = 25.0) -> dict:
     """
-    Call pp-heal tool via subprocess.
+    Call pp-heal tool directly.
     
     Args:
         prompt: User prompt to heal
         mode: Healing mode ("clarity", "anger", "auto")
-        timeout: Subprocess timeout in seconds
+        timeout: Timeout in seconds (unused in direct call, kept for compatibility)
         
     Returns:
         Heal result dict with healed_prompt, changes_made, etc.
         On error: Returns {"healed_prompt": original} to fail open
     """
-    logger.debug(f"Calling pp-heal with mode={mode}, timeout={timeout}s")
+    start_time = datetime.now()
+    logger.debug(f"Calling pp-heal directly with mode={mode} (timeout={timeout}s)")
+    logger.info(f"Original prompt [500 chars]: {truncate_prompt(prompt, 500)}")
     
     try:
-        # Find project root
-        project_root = Path(__file__).parent.parent
+        # Import here to avoid issues if imports fail
+        from mcp_server.tools import pp_heal
         
-        # Build subprocess command to call pp_heal
-        cmd = [
-            "uv", "run", "python", "-c",
-            f"""
-import json
-import sys
-sys.path.insert(0, '.')
-from mcp_server.tools import pp_heal
-
-prompt = sys.argv[1]
-result = pp_heal(prompt=prompt, mode='{mode}')
-print(json.dumps(result))
-""",
-            prompt
-        ]
+        # Call pp_heal directly
+        response = pp_heal(prompt=prompt, mode=mode)
         
-        # Run subprocess with timeout
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-            cwd=project_root
-        )
+        # Calculate timing
+        elapsed = (datetime.now() - start_time).total_seconds()
         
-        # Parse JSON output
-        if result.returncode == 0 and result.stdout.strip():
-            response = json.loads(result.stdout)
-            logger.info(f"pp-heal completed ({len(response.get('changes_made', []))} changes)")
-            logger.debug(f"Healed prompt: {response.get('healed_prompt', '')[:100]}...")
-            return response
-        else:
-            # Heal failed - return original
-            logger.error(f"pp-heal failed with returncode {result.returncode}")
-            logger.error(f"stderr: {result.stderr}")
-            return {
-                "healed_prompt": prompt,
-                "changes_made": [],
-                "error": "Heal failed"
-            }
+        # Log results
+        healed_prompt = response.get('healed_prompt', prompt)
+        changes_made = response.get('changes_made', [])
+        
+        logger.info(f"pp-heal completed in {elapsed:.3f}s")
+        logger.info(f"Healed prompt [500 chars]: {truncate_prompt(healed_prompt, 500)}")
+        logger.info(f"Changes made ({len(changes_made)}): {', '.join(changes_made) if changes_made else 'none'}")
+        
+        return response
             
-    except subprocess.TimeoutExpired:
-        logger.warning(f"pp-heal timeout after {timeout}s")
-        return {
-            "healed_prompt": prompt,
-            "changes_made": [],
-            "error": "Heal timeout"
-        }
     except Exception as e:
-        logger.error(f"pp-heal error: {e}", exc_info=True)
+        # Heal failed - return original
+        elapsed = (datetime.now() - start_time).total_seconds()
+        logger.error(f"pp-heal error after {elapsed:.3f}s: {e}", exc_info=True)
         return {
             "healed_prompt": prompt,
             "changes_made": [],
@@ -298,10 +266,11 @@ def process_hook(event: dict, config: dict) -> dict:
     """
     prompt = event.get("prompt", "").strip()
     logger.info(f"Processing prompt (length: {len(prompt)})")
+    logger.info(f"Prompt [500 chars]: {truncate_prompt(prompt, 500)}")
     
     # Handle empty prompts
     if not prompt:
-        logger.info("Empty prompt detected - blocking")
+        logger.info("❌ BLOCKED - Empty prompt detected")
         return {
             "continue": False,
             "userMessage": "⚠️ Empty prompt - please provide instructions"
@@ -311,11 +280,17 @@ def process_hook(event: dict, config: dict) -> dict:
     guard_result = call_mcp_guard(prompt, timeout=25.0)
     verdict = guard_result.get("verdict", "proceed")
     reason = guard_result.get("reason", "No reason provided")
+    confidence = guard_result.get("confidence", 0.0)
+    issues = guard_result.get("issues", [])
     
     # Process verdict
     if verdict == "proceed":
         # ✅ Good prompt - allow through
-        logger.info("Verdict: PROCEED - allowing prompt through")
+        logger.info("=" * 60)
+        logger.info(f"✅ ALLOWED - Verdict: PROCEED")
+        logger.info(f"   Reason: {reason}")
+        logger.info(f"   Confidence: {confidence:.2f}")
+        logger.info("=" * 60)
         return {
             "continue": True,
             "prompt": prompt
@@ -323,7 +298,13 @@ def process_hook(event: dict, config: dict) -> dict:
     
     elif verdict == "intervene":
         # ❌ Bad prompt - block with explanation
-        logger.info(f"Verdict: INTERVENE - blocking prompt ({reason})")
+        logger.info("=" * 60)
+        logger.info(f"❌ BLOCKED - Verdict: INTERVENE")
+        logger.info(f"   Reason: {reason}")
+        logger.info(f"   Confidence: {confidence:.2f}")
+        if issues:
+            logger.info(f"   Issues: {', '.join(issues)}")
+        logger.info("=" * 60)
         return {
             "continue": False,
             "userMessage": f"🛑 Prompt needs improvement: {reason}"
@@ -332,20 +313,36 @@ def process_hook(event: dict, config: dict) -> dict:
     elif verdict == "heal":
         # 🩹 Healable prompt - auto-heal if enabled
         if config["auto_cast_heal"]:
-            logger.info("Verdict: HEAL - auto-healing enabled, healing prompt")
+            logger.info("=" * 60)
+            logger.info(f"🩹 HEALING - Verdict: HEAL (auto_cast_heal=true)")
+            logger.info(f"   Reason: {reason}")
+            logger.info(f"   Confidence: {confidence:.2f}")
+            if issues:
+                logger.info(f"   Issues: {', '.join(issues)}")
+            logger.info("=" * 60)
+            
             # Auto-heal and allow through
             heal_mode = "auto"  # Will use anger_translator config internally
             heal_result = call_mcp_heal(prompt, mode=heal_mode, timeout=25.0)
             healed_prompt = heal_result.get("healed_prompt", prompt)
             
-            logger.info("Auto-heal complete - allowing healed prompt through")
+            logger.info("=" * 60)
+            logger.info("✅ ALLOWED - Healed prompt submitted")
+            logger.info("=" * 60)
             return {
                 "continue": True,
                 "prompt": healed_prompt,
                 "userMessage": "🩹 Prompt auto-healed for clarity"
             }
         else:
-            logger.info("Verdict: HEAL - auto-healing disabled, blocking for manual improvement")
+            logger.info("=" * 60)
+            logger.info(f"🛑 BLOCKED - Verdict: HEAL (auto_cast_heal=false)")
+            logger.info(f"   Reason: {reason}")
+            logger.info(f"   Confidence: {confidence:.2f}")
+            if issues:
+                logger.info(f"   Issues: {', '.join(issues)}")
+            logger.info("   Note: Auto-healing is disabled, manual improvement required")
+            logger.info("=" * 60)
             # Auto-heal disabled - block and suggest manual improvement
             return {
                 "continue": False,
@@ -353,7 +350,9 @@ def process_hook(event: dict, config: dict) -> dict:
             }
     
     # Unknown verdict - fail open (allow)
-    logger.warning(f"Unknown verdict: {verdict} - failing open")
+    logger.warning("=" * 60)
+    logger.warning(f"⚠️ ALLOWED - Unknown verdict: {verdict} (failing open)")
+    logger.warning("=" * 60)
     return {
         "continue": True,
         "prompt": prompt

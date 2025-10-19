@@ -3,8 +3,8 @@
   "hooks": {
     "beforeSubmitPrompt": [
       {
-        "command": "python3",
-        "args": ["hooks/before_submit_prompt.py"]
+        "command": "uv",
+        "args": ["run", "python", "hooks/before_submit_prompt.py"]
       }
     ]
   }
