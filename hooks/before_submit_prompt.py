@@ -297,17 +297,33 @@ def process_hook(event: dict, config: dict) -> dict:
         }
     
     elif verdict == "intervene":
-        # ❌ Bad prompt - block with explanation
+        # ❌ Bad prompt - prepend feedback so user can choose
         logger.info("=" * 60)
-        logger.info(f"❌ BLOCKED - Verdict: INTERVENE")
+        logger.info(f"⚠️ FEEDBACK PREPENDED - Verdict: INTERVENE")
         logger.info(f"   Reason: {reason}")
         logger.info(f"   Confidence: {confidence:.2f}")
         if issues:
             logger.info(f"   Issues: {', '.join(issues)}")
         logger.info("=" * 60)
+        
+        # Get suggestions from guard result
+        suggestions = guard_result.get('suggestions', '')
+        
+        # Format feedback to prepend
+        feedback = f"""[PROMPT QUALITY CHECK]
+🛑 {reason}
+
+💡 Suggestions:
+{suggestions if suggestions else 'Consider adding more context and specifics.'}
+
+---
+Original prompt:
+"""
+        
+        # Prepend feedback and allow through (user can choose to revise or proceed)
         return {
-            "continue": False,
-            "userMessage": f"🛑 Prompt needs improvement: {reason}"
+            "continue": True,
+            "prompt": feedback + prompt
         }
     
     elif verdict == "heal":
@@ -336,17 +352,34 @@ def process_hook(event: dict, config: dict) -> dict:
             }
         else:
             logger.info("=" * 60)
-            logger.info(f"🛑 BLOCKED - Verdict: HEAL (auto_cast_heal=false)")
+            logger.info(f"⚠️ FEEDBACK PREPENDED - Verdict: HEAL (auto_cast_heal=false)")
             logger.info(f"   Reason: {reason}")
             logger.info(f"   Confidence: {confidence:.2f}")
             if issues:
                 logger.info(f"   Issues: {', '.join(issues)}")
-            logger.info("   Note: Auto-healing is disabled, manual improvement required")
+            logger.info("   Note: Auto-healing is disabled, showing suggestions instead")
             logger.info("=" * 60)
-            # Auto-heal disabled - block and suggest manual improvement
+            
+            # Get suggestions from guard result
+            suggestions = guard_result.get('suggestions', '')
+            
+            # Format feedback to prepend
+            feedback = f"""[PROMPT QUALITY CHECK]
+💡 {reason}
+
+Suggestions:
+{suggestions if suggestions else 'Consider adding more context and specifics.'}
+
+Tip: Enable AUTO_CAST_HEAL in .env for automatic fixes.
+
+---
+Original prompt:
+"""
+            
+            # Prepend feedback and allow through (user can choose to revise or proceed)
             return {
-                "continue": False,
-                "userMessage": f"💡 Prompt could be improved: {reason}\n\nTip: Enable AUTO_CAST_HEAL for automatic fixes"
+                "continue": True,
+                "prompt": feedback + prompt
             }
     
     # Unknown verdict - fail open (allow)

@@ -45,7 +45,7 @@ Within the Citadel, the Paladins embody different callings — each a facet of t
 
 ---
 
-### 🕊️ Translators of Wrath
+### �️ Translators of Wrath
 
 *Among the Paladins there are also the Translators of Wrath — gentle souls who listen to fury and return peace.*  
 *They do not punish anger; they simply render it harmless.*
